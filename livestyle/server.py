@@ -125,7 +125,7 @@ def off(name, callback=None):
 def one(name, callback):
 	dispatcher.one(name, callback)
 
-def start(port=54001, address='127.0.0.1'):
+def start(port=54000, address='127.0.0.1'):
 	"Starts LiveStyle server on given port"
 	global httpserver
 	logger.info('Starting LiveStyle server on port %s' % port)
