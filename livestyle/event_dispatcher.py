@@ -8,13 +8,14 @@ class EventDispatcher():
 		self._callbacks = None
 
 	def on(self, name, callback, once=False):
-		if name not in self._callbacks:
-			self._callbacks[name] = []
+		for event in name.split():
+			if event not in self._callbacks:
+				self._callbacks[event] = []
 
-		self._callbacks[name].append({
-			'callback': callback,
-			'once': once
-		})
+			self._callbacks[event].append({
+				'callback': callback,
+				'once': once
+			})
 
 	def off(self, name, callback=None):
 		if name in self._callbacks:
@@ -23,7 +24,7 @@ class EventDispatcher():
 			else:
 				self._callbacks[name] = [c for c in self._callbacks[name] if c['callback'] != callback]
 
-	def one(self, name, callback):
+	def once(self, name, callback):
 		self.on(name, callback, True)
 
 	def emit(self, name, *args, **kwargs):

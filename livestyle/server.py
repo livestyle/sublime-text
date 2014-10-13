@@ -42,6 +42,7 @@ class WebsocketHandler(tornado.websocket.WebSocketHandler):
 	def open(self):
 		logger.debug('Client connected')
 		dispatcher.emit('open', self)
+		send(clients, message('client-connect'), self)
 		clients.add(self)
 	
 	def on_message(self, message):
@@ -51,6 +52,9 @@ class WebsocketHandler(tornado.websocket.WebSocketHandler):
 		logger.debug('Client disconnected')
 		dispatcher.emit('close', self)
 		remove_client(self)
+
+	def check_origin(self, origin):
+		return True
 
 application = tornado.web.Application([
 	(r'/livestyle', WebsocketHandler),
@@ -65,17 +69,24 @@ except NameError:
 	def isstr(s):
 		return isinstance(s, str)
 
+def message(name, data=None):
+	"Creates new message"
+	msg = {'name': name}
+	if data is not None:
+		msg['data'] = data
+	return msg
+
+
 def remove_client(client):
 	"Removes given client from all collections"
 	clients.discard(client)
 	patchers.discard(client)
 
+	send(clients, message('client-disconnect'))
+
 	for editor_id, editor in editors.items():
 		if editor is client:
-			send(clients, {
-				'name': 'editor-disconnect',
-				'data': {'id': editor_id}
-			})
+			send(clients, message('editor-disconnect', {'id': editor_id}))
 			del editors[editor_id]
 
 def handle_message(message, client):
@@ -105,7 +116,7 @@ def send(receivers, message, exclude=None):
 	"Sends message to given receivers"
 
 	if exclude:
-		receivers = [client for client in receivers if c is not exclude]
+		receivers = [client for client in receivers if client is not exclude]
 
 	if not receivers:
 		logger.debug('Cannot send message, client list empty')

@@ -9,10 +9,10 @@ for p in ['', 'livestyle', 'tornado.zip', 'backports.zip']:
 	if p not in sys.path:
 		sys.path.append(p)
 
-import tornado.ioloop
-import tornado.websocket
 import livestyle.server as server
+import livestyle.client as client
 from tornado import gen
+from tornado.ioloop import IOLoop
 
 # setup logger
 server.logger.propagate = False
@@ -23,35 +23,35 @@ if not server.logger.handlers:
 	ch.setFormatter(logging.Formatter('Emmet LiveStyle: %(message)s'))
 	server.logger.addHandler(ch)
 
-# start socket server
-# server.start()
-# tornado.ioloop.IOLoop.instance().start()
-
-def message_handler(message):
-	payload = json.loads(message)
-	print('Got message %s' % payload['name'])
-
 def start_app():
-	print('Start loop')
-	tornado.ioloop.IOLoop.instance().add_future(client_connect(), lambda f: start_app())
+	print('Start app')
+	IOLoop.instance().add_future(client_connect(), restart_app)
+
+def restart_app(f):
+	print('Restarting app because %s' % f.exception())
+	IOLoop.instance().call_later(1, start_app)
+
+@client.on('editor-connect')
+def on_editor_connect(data):
+	print('Editor connected')
+
+@client.on('open')
+def on_open(*args):
+	print('Connected to server')
+
+@client.on('open client-connect')
+def identify(*args):
+	print('Identify')
+	client.send('editor-connect', {'id': 'st3', 'title': 'Sublime Text 3'})
 
 @gen.coroutine
 def client_connect():
-	url = 'ws://127.0.0.1:54000/livestyle'
 	try:
-		ws = yield tornado.websocket.websocket_connect(url)
+		yield client.connect()
 	except Exception as e:
-		print('Create own server')
+		print('Create own server because %s' % e)
 		server.start()
-		ws = yield tornado.websocket.websocket_connect(url)
-
-
-	while True:
-		msg = yield ws.read_message()
-		if msg is None:
-			print('No connection')
-			break
-		message_handler(msg)
-
+		yield client.connect()
+	
 start_app()
 tornado.ioloop.IOLoop.instance().start()
