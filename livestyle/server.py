@@ -94,7 +94,7 @@ def handle_message(message, client):
 	payload = json.loads(message)
 	receivers = clients
 
-	logger.debug('Received message: %s' % payload['name'])
+	logger.debug('Dispatching message %s' % payload['name'])
 
 	if payload['name'] == 'editor-connect':
 		editors[payload['data']['id']] = client
@@ -127,14 +127,18 @@ def send(receivers, message, exclude=None):
 		for client in receivers:
 			client.write_message(message)
 
-def on(name, callback):
+def on(name, callback=None):
+	if callback is None: # using as decorator
+		return lambda f: dispatcher.on(name, f)
 	dispatcher.on(name, callback)
 
 def off(name, callback=None):
 	dispatcher.off(name, callback)
 
-def one(name, callback):
-	dispatcher.one(name, callback)
+def once(name, callback):
+	if callback is None: # using as decorator
+		return lambda f: dispatcher.once(name, f)
+	dispatcher.once(name, callback)
 
 def start(port=54000, address='127.0.0.1'):
 	"Starts LiveStyle server on given port"

@@ -1,10 +1,12 @@
 # A Tornado-based implementation of LiveStyle client
 import tornado.websocket
 import json
+import logging
 from tornado import gen
 from event_dispatcher import EventDispatcher
 
 dispatcher = EventDispatcher()
+logger = logging.getLogger('livestyle')
 sock = None
 
 @gen.coroutine
@@ -15,10 +17,12 @@ def connect(host='ws://127.0.0.1', port=54000, endpoint='/livestyle'):
 	sock = yield tornado.websocket.websocket_connect(url)
 
 	dispatcher.emit('open')
+	logger.debug('Connected to server at %s' % url)
 
 	while True:
 		msg = yield sock.read_message()
 		if msg is None:
+			logger.debug('Disconnected from server')
 			dispatcher.emit('close')
 			return
 		_handle_message(msg)
@@ -30,10 +34,12 @@ def send(name, data=None):
 			'name': name,
 			'data': data
 		}
+		logger.debug('Sending message "%s"' % name)
 		sock.write_message(json.dumps(payload))
 
 def _handle_message(message):
 	payload = json.loads(message)
+	logger.debug('Received message "%s"' % payload['name'])
 	dispatcher.emit(payload['name'], payload.get('data'))
 
 def on(name, callback=None):
