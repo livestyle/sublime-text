@@ -1,11 +1,11 @@
 # A Tornado-based LiveStyle server implementation
-# 
+#
 import json
 import logging
 from event_dispatcher import EventDispatcher
 
 # don't know why, but tornado's IOLoop cannot
-# properly load platform modules during runtime, 
+# properly load platform modules during runtime,
 # so we pre-import them
 try:
 	import select
@@ -40,13 +40,13 @@ class MainHandler(tornado.web.RequestHandler):
 
 class WebsocketHandler(tornado.websocket.WebSocketHandler):
 	def open(self):
-		logger.debug('Client connected')
 		dispatcher.emit('open', self)
 		send(clients, message('client-connect'), self)
 		clients.add(self)
-	
+		logger.debug('Client connected, total clients: %d' % len(clients))
+
 	def on_message(self, message):
-		handle_message(message, self)		
+		handle_message(message, self)
 
 	def on_close(self):
 		logger.debug('Client disconnected')
@@ -94,7 +94,7 @@ def handle_message(message, client):
 	payload = json.loads(message)
 	receivers = clients
 
-	logger.debug('Dispatching message %s' % payload['name'])
+	# logger.debug('Dispatching message %s' % payload['name'])
 
 	if payload['name'] == 'editor-connect':
 		editors[payload['data']['id']] = client
@@ -102,7 +102,7 @@ def handle_message(message, client):
 		patchers.add(client)
 	elif payload['name'] in ('calculate-diff', 'apply-patch'):
 		# These are very heavy and intensive messages
-		# that can be only handled by special clients 
+		# that can be only handled by special clients
 		# called 'patchers'. To save some resources and
 		# bandwidth it's recommended to send these
 		# messages to patchers only
@@ -152,6 +152,8 @@ def stop():
 	for c in clients:
 		c.close()
 	clients.clear()
+	patchers.clear()
+	editors.clear()
 
 	if httpserver:
 		logger.info('Stopping server')

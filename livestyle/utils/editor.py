@@ -14,9 +14,15 @@ try:
 	isinstance("", basestring)
 	def isstr(s):
 		return isinstance(s, basestring)
+
+	def hash(content):
+		return crc32(content)
 except NameError:
 	def isstr(s):
 		return isinstance(s, str)
+
+	def hash(content):
+		return crc32(bytes(content, 'UTF-8'))
 
 def main_thread(fn):
 	"Run function in main thread"
@@ -87,9 +93,6 @@ def focus_view(view):
 def view_hash(view):
 	return hash(content(view))
 
-def hash(content):
-	return crc32(content)
-
 ##################################
 # Editor locking, used to disable
 # diff requests when editor is
@@ -149,11 +152,11 @@ def unindent_text(text, pad):
 	@type pad: str
 	"""
 	lines = text.splitlines()
-	
+
 	for i,line in enumerate(lines):
 		if line.startswith(pad):
 			lines[i] = line[len(pad):]
-	
+
 	return '\n'.join(lines)
 
 def get_line_padding(line):

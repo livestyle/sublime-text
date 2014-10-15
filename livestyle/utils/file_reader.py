@@ -47,9 +47,9 @@ class FileCacheEntity(object):
 		so there's no need to touch file system to verify
 		file state
 		"""
-		return self.last_read < time.time() + FileCacheEntity.read_timeout:
+		return self.last_read < time.time() + FileCacheEntity.read_timeout
 
-def get_file_content(uri):
+def get_file_contents(uri):
 	"Returns given file data: its content and hash"
 	# first, check if file in cache
 	if uri not in _file_cache:

@@ -2,8 +2,8 @@ import sys
 import imp
 
 # Dependecy reloader for Emmet LiveStyle plugin
-# The original idea is borrowed from 
-# https://github.com/wbond/sublime_package_control/blob/master/package_control/reloader.py 
+# The original idea is borrowed from
+# https://github.com/wbond/sublime_package_control/blob/master/package_control/reloader.py
 
 reload_mods = []
 for mod in sys.modules:
@@ -15,6 +15,7 @@ mods_load_order = [
 	'livestyle.client',
 	'livestyle.server',
 	'livestyle.utils.editor'
+	'livestyle.utils.file_reader'
 ]
 
 for mod in mods_load_order:
