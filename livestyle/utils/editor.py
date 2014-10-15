@@ -29,11 +29,8 @@ def main_thread(fn):
 	return lambda *args, **kwargs: sublime.set_timeout(lambda: fn(*args, **kwargs), 1)
 
 def get_setting(name, default=None):
-	global _settings
-	if not _settings:
-		_settings = sublime.load_settings('LiveStyle.sublime-settings')
-
-	return _settings.get(name, default)
+	settings = sublime.load_settings('LiveStyle.sublime-settings')
+	return settings.get(name, default)
 
 def selector_setting(syntax):
 	key = '%s_files_selector' % syntax
@@ -131,6 +128,8 @@ def is_supported_view(view, syntaxes, strict=False):
 
 	for syntax in syntaxes:
 		sel = selector_setting(syntax)
+		if not sel:
+			continue
 		if not view.file_name() and not strict:
 			# For new files, check if current scope is text.plain (just created)
 			# or it's a strict syntax check

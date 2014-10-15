@@ -137,12 +137,13 @@ def respond_with_dependecy_list(data):
 
 @gen.coroutine
 def client_connect():
+	port = editor_utils.get_setting('port')
 	try:
-		yield client.connect()
+		yield client.connect(port=port)
 	except Exception as e:
 		print('Create own server because %s' % e)
-		server.start()
-		yield client.connect()
+		server.start(port=port)
+		yield client.connect(port=port)
 
 #############################
 # Editor plugin
@@ -201,11 +202,15 @@ class LivestyleReplaceContentCommand(sublime_plugin.TextCommand):
 
 # setup logger
 logger = logging.getLogger('livestyle')
-# logger.propagate = False
-logger.setLevel(logging.INFO)
+logger.propagate = False
+logger.setLevel(logging.DEBUG if editor_utils.get_setting('debug', False) else logging.INFO)
 if not logger.handlers:
 	ch = logging.StreamHandler()
 	ch.setFormatter(logging.Formatter('Emmet LiveStyle: %(message)s'))
 	logger.addHandler(ch)
 
-threading.Thread(target=_start).start()
+def plugin_loaded():
+	threading.Thread(target=_start).start()
+
+if sublime_ver < 3:
+	plugin_loaded()
