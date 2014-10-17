@@ -143,10 +143,11 @@ def identify(*args):
 	})
 	refresh_livestyle_files()
 
-# TODO set initial content of current view for connected patched
 @client.on('patcher-connect')
 def on_patcher_connect(*args):
-	pass
+	view = sublime.active_window().active_view()
+	if is_supported_view(view, True):
+		client.send('initial-content', editor_payload(view))
 
 @client.on('incoming-updates')
 def apply_incoming_updates(data):
@@ -179,7 +180,7 @@ def respond_with_dependecy_list(data):
 
 @gen.coroutine
 def client_connect():
-	port = editor_utils.get_setting('port')
+	port = editor_utils.get_setting('port', 54000)
 	try:
 		yield client.connect(port=port)
 	except Exception as e:
@@ -251,10 +252,8 @@ if not logger.handlers:
 	ch.setFormatter(logging.Formatter('Emmet LiveStyle: %(message)s'))
 	logger.addHandler(ch)
 
-print(get_global_deps(sublime.active_window().active_view(), 'less'))
+def plugin_loaded():
+	threading.Thread(target=_start).start()
 
-# def plugin_loaded():
-# 	threading.Thread(target=_start).start()
-
-# if sublime_ver < 3:
-# 	plugin_loaded()
+if sublime_ver < 3:
+	plugin_loaded()
