@@ -43,18 +43,60 @@ def view_syntax(view):
 	sv = is_supported_view(view)
 	return sv and sv['syntax'] or 'css'
 
+def get_global_deps(view, syntax):
+	"""
+	Returns list of global dependencies defined in project
+	preferences for given view.
+	Currently works in Sublime Text 3 only
+	"""
+	# get global stylesheets defined in "livestyle/globals"
+	# section of current project
+	result = []
+
+	if syntax == 'css':
+		return result
+
+	wnd = view.window()
+	project_file = wnd.project_file_name()
+	if not project_file or not wnd.project_data():
+		return result
+
+	project_base = os.path.dirname(project_file)
+	deps = wnd.project_data().get('livestyle', {}).get('globals', [])
+	# resolve globals: use only ones matched current syntax
+	# and make paths absolute
+	possible_ext = ['.%s' % syntax, '.css']
+	for d in deps:
+		if os.path.splitext(d)[1] not in possible_ext:
+			continue
+
+		d = os.path.expanduser(d)
+		if not os.path.isabs(d):
+			d = os.path.join(project_base, d)
+
+		result.append(d)
+	return result
+
 def editor_payload(view, data=None):
 	"Returns diff/patch payload for given view"
 	content = editor_utils.content(view)
+	syntax = view_syntax(view)
+
 	result = {
 		'uri':     editor_utils.file_name(view),
-		'syntax':  view_syntax(view),
+		'syntax':  syntax,
 		'content': content,
 		'hash':    editor_utils.hash(content),
-		# TODO add global dependencies from current project,
-		# must be filtered for current syntax
-		# globalDependencies: ['/demo/global.less']
 	}
+
+	global_deps = []
+	try:
+		global_deps = get_global_deps(view, syntax)
+	except Exception as e:
+		pass
+
+	if global_deps:
+		result['globalDependencies'] = global_deps
 
 	if data:
 		result.update(data)
@@ -209,8 +251,10 @@ if not logger.handlers:
 	ch.setFormatter(logging.Formatter('Emmet LiveStyle: %(message)s'))
 	logger.addHandler(ch)
 
-def plugin_loaded():
-	threading.Thread(target=_start).start()
+print(get_global_deps(sublime.active_window().active_view(), 'less'))
 
-if sublime_ver < 3:
-	plugin_loaded()
+# def plugin_loaded():
+# 	threading.Thread(target=_start).start()
+
+# if sublime_ver < 3:
+# 	plugin_loaded()
