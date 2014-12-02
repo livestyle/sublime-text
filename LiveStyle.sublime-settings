@@ -15,5 +15,5 @@
 	// property to "source.css, source.scss"
 	"css_files_selector": "source.css - source.css.less",
 	"less_files_selector": "source.less",
-	"scss_files_selector": "source.scss",
+	"scss_files_selector": "source.scss"
 }
