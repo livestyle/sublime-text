@@ -1,5 +1,6 @@
 # A Tornado-based LiveStyle server implementation
-#
+
+import os.path
 import json
 import logging
 from event_dispatcher import EventDispatcher
@@ -34,9 +35,10 @@ clients  = set()  # all connected clients
 patchers = set()  # clients identified as 'patcher'
 editors  = dict() # clients identified as 'editor'
 
+
 class MainHandler(tornado.web.RequestHandler):
 	def get(self):
-		self.write('LiveStyle websockets server is up and running')
+		self.render('index.html')
 
 class WebsocketHandler(tornado.websocket.WebSocketHandler):
 	def open(self):
@@ -56,10 +58,13 @@ class WebsocketHandler(tornado.websocket.WebSocketHandler):
 	def check_origin(self, origin):
 		return True
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+static_dir = os.path.join(current_dir, 'static')
 application = tornado.web.Application([
 	(r'/livestyle', WebsocketHandler),
+	(r'/(.+)', tornado.web.StaticFileHandler, {'path': static_dir}),
 	(r'/', MainHandler),
-])
+], template_path=static_dir)
 
 try:
 	isinstance("", basestring)
