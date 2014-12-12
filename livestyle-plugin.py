@@ -103,6 +103,17 @@ def editor_payload(view, data=None):
 
 	return result
 
+def send_unsaved_changes(view):
+	fname = view.file_name()
+	pristine = None
+	if not fname: # untitled file
+		pristine = ''
+	elif os.path.exists(fname):
+		pristine = file_reader.read_file(fname)
+
+	if pristine is not None:
+		client.send('calculate-diff', editor_payload(view, {'previous': pristine}))
+
 #############################
 # Server
 #############################
@@ -177,6 +188,16 @@ def respond_with_dependecy_list(data):
 		'files': response
 	})
 
+@client.on('request-unsaved-changes')
+def handle_unsaved_changes_request(data):
+	if not editor_utils.get_setting('send_unsaved_changes'):
+		return
+
+	files = data.get('files', [])
+	for f in files:
+		view = editor_utils.view_for_uri(f)
+		if view and view.is_dirty():
+			send_unsaved_changes(view)
 
 @gen.coroutine
 def client_connect():
@@ -238,6 +259,16 @@ class LivestyleReplaceContentCommand(sublime_plugin.TextCommand):
 
 		self.view.show(self.view.sel())
 		editor_utils.unlock(self.view)
+
+class LivestylePushUnsavedChangesCommand(sublime_plugin.TextCommand):
+	"Sends unsaved changes to connected clients"
+	# In terms of LiveStyle: sends `calculate-diff` request for
+	# current file against its pristine content
+	def run(self, edit, **kwargs):
+		if is_supported_view(self.view, True):
+			send_unsaved_changes(self.view)
+		else:
+			print('Current view is not a valid stylesheet')
 
 #############################
 # Start plugin

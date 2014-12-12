@@ -9,6 +9,9 @@
 	// ST console
 	"debug": false,
 
+	// Automatically send unsaved changes when browser reloads page
+	"send_unsaved_changes": true,
+
 	// A scope selector for files that should be handled by LiveStyle.
 	// Currently, works for syntaxes that are very close to CSS: LESS and SCSS
 	// If you want to add LESS and SCSS support, change the value of this
