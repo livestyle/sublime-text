@@ -2,6 +2,11 @@
 var client = require('livestyle-client');
 var patcher = require('livestyle-cssom-patcher');
 
+function enabled() {
+	var elem = document && document.documentElement;
+	return !elem || elem.getAttribute('data-livestyle-extension') !== 'available';
+}
+
 function extractHost(url) {
 	if (url) {
 		var m = url.match(/^(\w+)(:\/\/.+?)(\/|$)/);
@@ -32,7 +37,10 @@ function init(config) {
 		console.log('LiveStyle: closed connection to server');
 	})
 	.on('incoming-updates', function(data) {
-		console.log('incoming patch', data.uri, data.patches);
+		// console.log('incoming patch', data.uri, data.patches);
+		if (!enabled()) {
+			return;
+		}
 		var result = patcher.patch(data.uri, data.patches);
 		if (!result && config.rewriteHost) {
 			// Unable to patch CSS, might be due to host mismatch.
@@ -429,13 +437,17 @@ define(function(require, exports, module) {
 			name = name[0];
 		}
 
-		this.name = name;
+		this.name = normalizeSelector(name);
 		this.pos = pos || 1;
 	}
 
 	NodePathComponent.prototype.toString = function() {
 		return this.name +  (this.pos > 1 ? '|' + this.pos : '');
 	};
+
+	function normalizeSelector(sel) {
+		return sel.trim().replace(/:+(before|after)$/, '::$1');
+	}
 
 	/**
 	 * Findes all stylesheets in given context, including
@@ -499,7 +511,6 @@ define(function(require, exports, module) {
 	 * @return {String}
 	 */
 	function ruleName(rule) {
-		
 		var sel = rule.selectorText || atRuleName(rule);
 		if (sel) {
 			return sel;
@@ -547,7 +558,6 @@ define(function(require, exports, module) {
 	function patchRule(rule, patch) {
 		if (!rule) {
 			// not a CSSStyleRule, aborting
-			console.log('aborting');
 			return;
 		}
 
@@ -590,8 +600,6 @@ define(function(require, exports, module) {
 			rule.style.cssText += properties;
 		}
 
-		console.log('Subrules', updateRules);
-
 		// insert @-properties as rules
 		while (childRule = updateRules['@charset'].pop()) {
 			rule.insertRule(childRule.name + ' ' + childRule.value, 0);
@@ -624,8 +632,14 @@ define(function(require, exports, module) {
 		}, '');
 
 		var parent = match.parent;
+		var insertIndex = parent.ref.cssRules ? parent.ref.cssRules.length : 0;
+		if (match.node) {
+			insertIndex = match.node.ix;
+		}
+
+		// console.log('Insert rule at index', insertIndex, match);
 		try {
-			var ix = parent.ref.insertRule(accumulated, match.index);
+			var ix = parent.ref.insertRule(accumulated, insertIndex);
 		} catch (e) {
 			console.warn('LiveStyle:', e.message);
 			return;
@@ -635,9 +649,9 @@ define(function(require, exports, module) {
 		var indexed = exports.createIndex(ctx);
 		indexed.name = ruleName(ctx);
 		indexed.ix = ix;
-		parent.children.splice(ix, 0, indexed);
-		for (var i = ix + 1, il = parent.children.length; i < il; i++) {
-			parent.children.ix++;
+		parent.children.splice(match.index, 0, indexed);
+		for (var i = match.index + 1, il = parent.children.length; i < il; i++) {
+			parent.children[i].ix++;
 		}
 
 		while (ctx.cssRules && ctx.cssRules.length) {
@@ -649,14 +663,18 @@ define(function(require, exports, module) {
 
 	function deleteRuleFromMatch(match) {
 		try {
-			parent(match.node.ref).deleteRule(match.ix);
+			parent(match.node.ref).deleteRule(match.node.ix);
 		} catch (e) {
 			console.warn('LiveStyle:', e);
 			console.warn(match);
 		}
-		var ix = match.parent.children.indexOf(match);
+		// console.log('Removed rule at index', match.node.ix);
+		var ix = match.parent.children.indexOf(match.node);
 		if (~ix) {
 			match.parent.children.splice(ix, 1);
+			for (var i = ix, il = match.parent.children.length, child; i < il; i++) {
+				match.parent.children[i].ix--;
+			}
 		}
 	}
 
@@ -707,7 +725,7 @@ define(function(require, exports, module) {
 
 		patches.forEach(function(patch) {
 			var path = new NodePath(patch.path);
-			var hints = hints ? normalizeHints(patch.hints) : null;
+			var hints = patch.hints ? normalizeHints(patch.hints) : null;
 			var location = pathfinder.find(index, path, hints);
 			if (location.partial && patch.action === 'remove') {
 				// node is absent, do nothing
@@ -758,7 +776,7 @@ define(function(require, exports, module) {
 
 			item = {
 				ix: i,
-				name: name,
+				name: normalizeSelector(name),
 				parent: parent,
 				children: [],
 				ref: rule,
@@ -897,6 +915,27 @@ define(function(require, exports, module) {
 		return true;
 	}
 
+	function matchingSet(items, hints) {
+		var result = [];
+		if (!hints || !hints.length) {
+			return result;
+		}
+
+		var hl = hints.length;
+		items.forEach(function(item, i) {
+			if (hints[0].name === nodeName(item)) {
+				for (var j = 1; j < hl; j++) {
+					if (!items[i + j] || nodeName(items[i +j]) !== hints[j].name) {
+						return false;
+					}
+				}
+				result.push(i);
+			}
+		});
+
+		return result;
+	};
+
 	return {
 		/**
 		 * Tries to find the best insertion point for absent
@@ -964,44 +1003,24 @@ define(function(require, exports, module) {
 				return parent.children.length;
 			}
 
-			var before = last(hint.before);
-			var after = hint.after[0];
+			var before = matchingSet(items, hint.before).map(function(ix) {
+				return ix + hint.before.length;
+			});
+			var after = matchingSet(items, hint.after);
 			var possibleResults = [];
-
-			if (before && after) {
+			if (hint.before.length && hint.after.length) {
 				// we have both sets of hints, find index between them
-				for (var i = items.length - 1; i >= 0; i--) {
-					if (before.name === nodeName(items[i]) && after.name === nodeName(items[i + 1])) {
-						if (matchesBeforeHints(items[i + 1], hint.before) && matchesAfterHints(items[i], hint.after)) {
-							return i + 1;
+				before.forEach(function(ix) {
+					for (var i = 0, il = after.length; i < il; i++) {
+						if (after[i] >= ix) {
+							return possibleResults.push(after[i]);
 						}
-						possibleResults.push(i + 1);
 					}
-				}
-			} else if (before) {
-				// we have "before" set only, return index right after
-				// last component
-				var restBefore = hint.before.slice(0, -1);
-				for (var i = items.length - 1; i >= 0; i--) {
-					if (before.name === nodeName(items[i])) {
-						if (matchesBeforeHints(items[i], restBefore)) {
-							return i + 1;
-						}
-						possibleResults.push(i + 1);
-					}
-				}
-			} else if (after) {
-				// we have "after" set only, return index right before
-				// first component
-				var restAfter = hint.after.slice(1);
-				for (var i = items.length - 1; i >= 0; i--) {
-					if (after.name === nodeName(items[i])) {
-						if (matchesAfterHints(items[i], restAfter)) {
-							return i;
-						}
-						possibleResults.push(i);
-					}
-				}
+				});
+			} else if (hint.before.length) {
+				possibleResults = before;
+			} else if (hint.after.length) {
+				possibleResults = after;
 			}
 
 			// insert nodes at the end by default
