@@ -229,7 +229,7 @@ class LivestyleListener(sublime_plugin.EventListener):
 
 	def on_activated(self, view):
 		refresh_livestyle_files()
-		if is_supported_view(view, True):
+		if is_supported_view(view):
 			client.send('initial-content', editor_payload(view))
 
 	def on_post_save(self, view):

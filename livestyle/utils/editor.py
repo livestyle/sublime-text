@@ -52,7 +52,7 @@ def file_name(view):
 
 def temp_file_name(view):
 	"Returns temporary name for (unsaved) views"
-	return '<untitled:%d>' % view.id()
+	return '[untitled:%d]' % view.id()
 
 def all_views():
 	"Returns all view from all windows"
