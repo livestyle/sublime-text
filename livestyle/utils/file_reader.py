@@ -20,7 +20,7 @@ class FileCacheEntity(object):
 		self.last_access = 0
 		self._content = None
 
-	def content():
+	def content(self):
 		if self._content and not self.is_valid():
 			# content is already loaded, check if it's still valid
 			self._content = None
@@ -41,7 +41,7 @@ class FileCacheEntity(object):
 		self.last_access = time.time()
 		return self._content
 
-	def is_valid():
+	def is_valid(self):
 		"""
 		Check if current entry was recently created/updated 
 		so there's no need to touch file system to verify
