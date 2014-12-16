@@ -35,7 +35,7 @@ class FileCacheEntity(object):
 			self._content = {
 				'uri': self.uri,
 				'content': c,
-				'hash': crc32(c)
+				'hash': crc32(bytes(c, 'UTF-8'))
 			}
 
 		self.last_access = time.time()
@@ -51,6 +51,7 @@ class FileCacheEntity(object):
 
 def get_file_contents(uri):
 	"Returns given file data: its content and hash"
+	uri = uri['uri']
 	# first, check if file in cache
 	if uri not in _file_cache:
 		if os.path.exists(uri):
