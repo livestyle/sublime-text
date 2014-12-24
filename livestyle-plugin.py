@@ -3,6 +3,7 @@ import os.path
 import logging
 import imp
 import threading
+import traceback
 
 import sublime
 import sublime_plugin
@@ -132,6 +133,9 @@ def restart_app(f):
 		# if app termination was caused by exception -- restart it,
 		# otherwise it was a requested shutdown
 		logger.info('Restarting app because %s' % exc)
+		exc = f.exc_info()
+		if exc:
+			logger.info(traceback.format_exception(*exc))
 		IOLoop.instance().call_later(1, start_app)
 
 def refresh_livestyle_files():
@@ -205,7 +209,7 @@ def client_connect():
 	try:
 		yield client.connect(port=port)
 	except Exception as e:
-		print('Create own server because %s' % e)
+		logger.info('Create own server because %s' % e)
 		server.start(port=port)
 		yield client.connect(port=port)
 
@@ -229,7 +233,7 @@ class LivestyleListener(sublime_plugin.EventListener):
 
 	def on_activated(self, view):
 		refresh_livestyle_files()
-		if is_supported_view(view):
+		if is_supported_view(view, True):
 			client.send('initial-content', editor_payload(view))
 
 	def on_post_save(self, view):
@@ -268,7 +272,7 @@ class LivestylePushUnsavedChangesCommand(sublime_plugin.TextCommand):
 		if is_supported_view(self.view, True):
 			send_unsaved_changes(self.view)
 		else:
-			print('Current view is not a valid stylesheet')
+			logger.info('Current view is not a valid stylesheet')
 
 #############################
 # Start plugin
@@ -280,7 +284,7 @@ logger.propagate = False
 logger.setLevel(logging.DEBUG if editor_utils.get_setting('debug', False) else logging.INFO)
 if not logger.handlers:
 	ch = logging.StreamHandler()
-	ch.setFormatter(logging.Formatter('Emmet LiveStyle: %(message)s'))
+	ch.setFormatter(logging.Formatter('LiveStyle: %(message)s'))
 	logger.addHandler(ch)
 
 def plugin_loaded():
