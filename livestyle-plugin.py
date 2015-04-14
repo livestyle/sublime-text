@@ -262,7 +262,14 @@ class LivestyleReplaceContentCommand(sublime_plugin.TextCommand):
 			self.view.replace(edit, sublime.Region(0, self.view.size()), payload.get('content', ''))
 
 		self.view.show(self.view.sel())
-		editor_utils.unlock(self.view)
+
+		# update initial content for current view in LiveStyle cache
+		if is_supported_view(self.view, True):
+			client.send('initial-content', editor_payload(self.view))
+		
+		# unlock after some timeout to ensure that
+		# on_modified event didn't triggered 'calculate-diff' event
+		sublime.set_timeout(lambda: editor_utils.unlock(self.view), 10)
 
 class LivestylePushUnsavedChangesCommand(sublime_plugin.TextCommand):
 	"Sends unsaved changes to connected clients"
