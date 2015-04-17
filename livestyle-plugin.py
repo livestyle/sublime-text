@@ -4,6 +4,7 @@ import logging
 import imp
 import threading
 import traceback
+import re
 
 import sublime
 import sublime_plugin
@@ -41,8 +42,18 @@ def is_supported_view(view, strict=False):
 
 def view_syntax(view):
 	"Returns LiveStyle-supported syntax for given view"
+	syntax = 'css'
 	sv = is_supported_view(view)
-	return sv and sv['syntax'] or 'css'
+	if sv:
+		syntax = sv['syntax']
+		# detecting syntax by scope selector isn't always a good idea:
+		# sometimes users accidentally pick wrong syntax, for example,
+		# CSS for .less files. So if this is not an untitled file 
+		# we're editing, use file extension to resolve syntax
+		m = re.search(r'\.(css|less|scss)$', editor_utils.file_name(view))
+		if m: syntax = m.group(1)
+
+	return syntax
 
 def get_global_deps(view, syntax):
 	"""
