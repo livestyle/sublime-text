@@ -89,14 +89,19 @@ def remove_client(client):
 
 	send(clients, message('client-disconnect'))
 
-	for editor_id, editor in editors.items():
+	for editor_id, editor in list(editors.items()):
 		if editor is client:
 			send(clients, message('editor-disconnect', {'id': editor_id}))
 			del editors[editor_id]
 
 def handle_message(message, client):
 	"Perform a special processing of incoming messages"
-	payload = json.loads(message)
+	try:
+		payload = json.loads(message)
+	except Error as e:
+		logger.error('Error while handling incoming message: %s' % e)
+		return
+
 	receivers = clients
 
 	# logger.debug('Dispatching message %s' % payload['name'])
