@@ -177,7 +177,7 @@ def on_patcher_connect(*args):
 
 @client.on('incoming-updates')
 def apply_incoming_updates(data):
-	view = editor_utils.view_for_uri(data['uri'])
+	view = editor_utils.view_for_uri(data.get('uri'))
 	if view:
 		client.send('apply-patch', editor_payload(view, {
 			'patches': data['patches']
