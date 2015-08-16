@@ -152,19 +152,21 @@ def once(name, callback):
 
 def start(port=54000, address='127.0.0.1'):
 	"Starts LiveStyle server on given port"
+	stop()
 	global httpserver
 	logger.info('Starting LiveStyle server on port %s' % port)
 	httpserver = tornado.httpserver.HTTPServer(application)
 	httpserver.listen(port, address=address)
 
 def stop():
-	global httpserver
-	for c in clients:
+	for c in clients.copy():
 		c.close()
 	clients.clear()
 	patchers.clear()
 	editors.clear()
 
+	global httpserver
 	if httpserver:
 		logger.info('Stopping server')
 		httpserver.stop()
+		httpserver = None

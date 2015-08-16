@@ -13,6 +13,11 @@ sock = None
 def connect(host='ws://127.0.0.1', port=54000, endpoint='/livestyle'):
 	"Connects to LiveStyle server"
 	global sock
+
+	if connected():
+		logger.debug('Client already connected')
+		return
+
 	url = '%s:%d%s' % (host, port, endpoint)
 	sock = yield tornado.websocket.websocket_connect(url)
 
@@ -22,10 +27,14 @@ def connect(host='ws://127.0.0.1', port=54000, endpoint='/livestyle'):
 	while True:
 		msg = yield sock.read_message()
 		if msg is None:
+			sock = None
 			logger.debug('Disconnected from server')
 			dispatcher.emit('close')
 			return
 		_handle_message(msg)
+
+def connected():
+	return sock != None
 
 def send(name, data=None):
 	"Sends given message with optional data to all connected LiveStyle clients"

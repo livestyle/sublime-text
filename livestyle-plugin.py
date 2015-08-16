@@ -135,30 +135,41 @@ def _start():
 	IOLoop.instance().start()
 
 def start_app():
-	logger.info('Start app')
-	IOLoop.instance().add_future(client_connect(), restart_app)
+	if not client.connected():
+		logger.info('Start app')
+		IOLoop.instance().add_future(client_connect(), restart_app)
 
 def restart_app(f):
-	exc = f.exception()
-	if exc:
+	logger.info('Requested app restart')
+	# server.stop()
+	exception = f.exception()
+	if exception:
 		# if app termination was caused by exception -- restart it,
 		# otherwise it was a requested shutdown
 		logger.info('Restarting app because %s' % exc)
 		exc = f.exc_info()
 		if exc:
 			logger.info(traceback.format_exception(*exc))
-		IOLoop.instance().call_later(1, start_app)
+	IOLoop.instance().call_later(1, start_app)
+
+def stop_app():
+	server.stop()
+	IOLoop.instance().stop()
 
 def refresh_livestyle_files():
-	"Sends currenly opened files, available for live update, to all connected clients"
+	"Sends currently opened files, available for live update, to all connected clients"
 	client.send('editor-files', {
 		'id': 'st%d' % sublime_ver,
 		'files': editor_utils.supported_files(supported_syntaxes)
 	})
 
 def unload_handler():
-	server.stop()
-	IOLoop.instance().stop()
+	logger.info('Run unload handler')
+	IOLoop.instance().add_callback(stop_app)
+
+@client.on('open')
+def on_open(*args):
+	logger.info('Client connected')	
 
 @client.on('open client-connect')
 def identify(*args):
@@ -191,7 +202,7 @@ def handle_patch_request(data):
 
 @client.on('request-files')
 def respond_with_dependecy_list(data):
-	"Returns list of requested dependecy files, with thier content"
+	"Returns list of requested dependency files, with their content"
 	response = []
 	for file in data.get('files', []):
 		file_data = file_reader.get_file_contents(file)
@@ -214,15 +225,40 @@ def handle_unsaved_changes_request(data):
 		if view and view.is_dirty():
 			send_unsaved_changes(view)
 
+@client.on('close')
+def on_client_close():
+	logger.info('Client dropped connection')
+	# start_app()
+
 @gen.coroutine
 def client_connect():
 	port = editor_utils.get_setting('port', 54000)
 	try:
 		yield client.connect(port=port)
-	except Exception as e:
-		logger.info('Create own server because %s' % e)
+		logger.info('Editor client connected')
+	except OSError as e:
+		logger.info('Client connection error: %s' % e)
+		if e.errno == 61:
+			 # 61 is a Connection refused code, which means there's no
+			 # running LiveStyle server. Create our own
+			create_server(port)
+			yield client.connect(port=port)
+		else:
+			raise e
+
+def create_server(port):
+	# Due to concurrency, it is possible that LiveStyle server
+	# is already running when we call this function
+	try:
+		logger.info('Create own server')
 		server.start(port=port)
-		yield client.connect(port=port)
+	except OSError as e:
+		if e.errno != 48:
+			# 48 is Address in use: another instance of LiveStyle
+			# server is running, bypass this exception, otherwise
+			# raise it again
+			raise e
+
 
 #############################
 # Editor plugin
