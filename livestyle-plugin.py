@@ -146,8 +146,8 @@ def restart_app(f):
 	if exception:
 		# if app termination was caused by exception -- restart it,
 		# otherwise it was a requested shutdown
+		logger.info('Restarting app because %s' % exception)
 		exc = f.exc_info()
-		logger.info('Restarting app because %s' % exc)
 		if exc:
 			logger.info(traceback.format_exception(*exc))
 	IOLoop.instance().call_later(1, start_app)
