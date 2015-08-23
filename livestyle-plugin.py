@@ -28,6 +28,9 @@ from tornado import gen
 from tornado.ioloop import IOLoop
 
 sublime_ver = int(sublime.version()[0])
+conn_attempts = 0
+max_conn_attempts = 10
+ls_server_port = 54000
 
 # List of supported by LiveStyle file extensions
 supported_syntaxes = ['css', 'less', 'scss']
@@ -135,9 +138,16 @@ def _start():
 	IOLoop.instance().start()
 
 def start_app():
-	if not client.connected():
-		logger.info('Start app')
-		IOLoop.instance().add_future(client_connect(), restart_app)
+	if client.connected():
+		return
+	
+	global conn_attempts
+	conn_attempts += 1
+	if conn_attempts >= max_conn_attempts:
+		return sublime.error_message('Unable to create to LiveStyle server. Make sure your firewall/proxy does not block %d port' % ls_server_port)
+
+	logger.info('Start app')
+	IOLoop.instance().add_future(client_connect(), restart_app)
 
 def restart_app(f):
 	logger.info('Requested app restart')
@@ -150,7 +160,7 @@ def restart_app(f):
 		exc = f.exc_info()
 		if exc:
 			logger.info(traceback.format_exception(*exc))
-	IOLoop.instance().call_later(1, start_app)
+	IOLoop.instance().call_later(3, start_app)
 
 def stop_app():
 	server.stop()
@@ -170,6 +180,8 @@ def unload_handler():
 @client.on('open')
 def on_open(*args):
 	logger.info('Client connected')	
+	global conn_attempts
+	conn_attempts = 0
 
 @client.on('open client-connect')
 def identify(*args):
@@ -232,19 +244,16 @@ def on_client_close():
 
 @gen.coroutine
 def client_connect():
-	port = editor_utils.get_setting('port', 54000)
+	port = editor_utils.get_setting('port', ls_server_port)
 	try:
 		yield client.connect(port=port)
 		logger.info('Editor client connected')
 	except OSError as e:
 		logger.info('Client connection error: %s' % e)
-		if e.errno == 61:
-			 # 61 is a Connection refused code, which means there's no
-			 # running LiveStyle server. Create our own
-			create_server(port)
-			yield client.connect(port=port)
-		else:
-			raise e
+		# In most cases this exception means there's no
+		# LiveStyle server running. Create our own one
+		create_server(port)
+		yield client.connect(port=port)
 
 def create_server(port):
 	# Due to concurrency, it is possible that LiveStyle server
