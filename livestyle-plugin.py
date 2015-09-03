@@ -192,6 +192,10 @@ def identify(*args):
 	})
 	refresh_livestyle_files()
 
+@client.on('open identify-client')
+def send_client_id(*args):
+	client.send('client-id', {'id': 'sublime-text'})
+
 @client.on('patcher-connect')
 def on_patcher_connect(*args):
 	view = sublime.active_window().active_view()
