@@ -26,14 +26,12 @@ import livestyle.utils.editor as editor_utils
 import livestyle.utils.file_reader as file_reader
 from tornado import gen
 from tornado.ioloop import IOLoop
+from livestyle.diff import diff
 
 sublime_ver = int(sublime.version()[0])
 conn_attempts = 0
 max_conn_attempts = 10
 ls_server_port = 54000
-
-# List of supported by LiveStyle file extensions
-supported_syntaxes = ['css', 'less', 'scss']
 
 #############################
 # Editor
@@ -41,82 +39,7 @@ supported_syntaxes = ['css', 'less', 'scss']
 
 def is_supported_view(view, strict=False):
 	"Check if given view can be user for LiveStyle updates"
-	return editor_utils.is_supported_view(view, supported_syntaxes, strict)
-
-def view_syntax(view):
-	"Returns LiveStyle-supported syntax for given view"
-	syntax = 'css'
-	sv = is_supported_view(view)
-	if sv:
-		syntax = sv['syntax']
-		# detecting syntax by scope selector isn't always a good idea:
-		# sometimes users accidentally pick wrong syntax, for example,
-		# CSS for .less files. So if this is not an untitled file 
-		# we're editing, use file extension to resolve syntax
-		m = re.search(r'\.(css|less|scss)$', editor_utils.file_name(view))
-		if m: syntax = m.group(1)
-
-	return syntax
-
-def get_global_deps(view, syntax):
-	"""
-	Returns list of global dependencies defined in project
-	preferences for given view.
-	Currently works in Sublime Text 3 only
-	"""
-	# get global stylesheets defined in "livestyle/globals"
-	# section of current project
-	result = []
-
-	if syntax == 'css':
-		return result
-
-	wnd = view.window()
-	project_file = wnd.project_file_name()
-	if not project_file or not wnd.project_data():
-		return result
-
-	project_base = os.path.dirname(project_file)
-	deps = wnd.project_data().get('livestyle', {}).get('globals', [])
-	# resolve globals: use only ones matched current syntax
-	# and make paths absolute
-	possible_ext = ['.%s' % syntax, '.css']
-	for d in deps:
-		if os.path.splitext(d)[1] not in possible_ext:
-			continue
-
-		d = os.path.expanduser(d)
-		if not os.path.isabs(d):
-			d = os.path.join(project_base, d)
-
-		result.append(d)
-	return result
-
-def editor_payload(view, data=None):
-	"Returns diff/patch payload for given view"
-	content = editor_utils.content(view)
-	syntax = view_syntax(view)
-
-	result = {
-		'uri':     editor_utils.file_name(view),
-		'syntax':  syntax,
-		'content': content,
-		'hash':    editor_utils.hash(content),
-	}
-
-	global_deps = []
-	try:
-		global_deps = get_global_deps(view, syntax)
-	except Exception as e:
-		pass
-
-	if global_deps:
-		result['globalDependencies'] = global_deps
-
-	if data:
-		result.update(data)
-
-	return result
+	return editor_utils.is_supported_view(view, strict)
 
 def send_unsaved_changes(view):
 	fname = view.file_name()
@@ -127,7 +50,7 @@ def send_unsaved_changes(view):
 		pristine = file_reader.read_file(fname)
 
 	if pristine is not None:
-		client.send('calculate-diff', editor_payload(view, {'previous': pristine}))
+		client.send('calculate-diff', editor_utils.payload(view, {'previous': pristine}))
 
 #############################
 # Server
@@ -170,7 +93,7 @@ def refresh_livestyle_files():
 	"Sends currently opened files, available for live update, to all connected clients"
 	client.send('editor-files', {
 		'id': 'st%d' % sublime_ver,
-		'files': editor_utils.supported_files(supported_syntaxes)
+		'files': editor_utils.supported_files()
 	})
 
 def unload_handler():
@@ -200,13 +123,13 @@ def send_client_id(*args):
 def on_patcher_connect(*args):
 	view = sublime.active_window().active_view()
 	if is_supported_view(view, True):
-		client.send('initial-content', editor_payload(view))
+		client.send('initial-content', editor_utils.payload(view))
 
 @client.on('incoming-updates')
 def apply_incoming_updates(data):
 	view = editor_utils.view_for_uri(data.get('uri'))
 	if view:
-		client.send('apply-patch', editor_payload(view, {
+		client.send('apply-patch', editor_utils.payload(view, {
 			'patches': data['patches']
 		}))
 
@@ -289,12 +212,14 @@ class LivestyleListener(sublime_plugin.EventListener):
 
 	def on_modified(self, view):
 		if is_supported_view(view, True) and not editor_utils.is_locked(view):
-			client.send('calculate-diff', editor_payload(view))
+			# client.send('calculate-diff', editor_utils.payload(view))
+			diff(view)
+			# pass
 
 	def on_activated(self, view):
 		refresh_livestyle_files()
 		if is_supported_view(view, True):
-			client.send('initial-content', editor_payload(view))
+			client.send('initial-content', editor_utils.payload(view))
 
 	def on_post_save(self, view):
 		refresh_livestyle_files()
@@ -325,7 +250,7 @@ class LivestyleReplaceContentCommand(sublime_plugin.TextCommand):
 
 		# update initial content for current view in LiveStyle cache
 		if is_supported_view(self.view, True):
-			client.send('initial-content', editor_payload(self.view))
+			client.send('initial-content', editor_utils.payload(self.view))
 		
 		# unlock after some timeout to ensure that
 		# on_modified event didn't triggered 'calculate-diff' event

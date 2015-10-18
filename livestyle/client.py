@@ -45,6 +45,22 @@ def send(name, data=None):
 		}
 		logger.debug('Sending message "%s"' % name)
 		sock.write_message(json.dumps(payload))
+	else:
+		logger.info('Unable to send "%s" message: socket is not connected' % name)
+	
+@gen.coroutine
+def send_async(name, data=None):
+	"Sends given message with optional data to all connected LiveStyle clients"
+	if sock:
+		payload = {
+			'name': name,
+			'data': data
+		}
+		logger.debug('Sending message "%s"' % name)
+		yield sock.write_message(json.dumps(payload))
+	else:
+		logger.info('Unable to send "%s" message: socket is not connected' % name)
+		yield False
 
 def _handle_message(message):
 	payload = json.loads(message)

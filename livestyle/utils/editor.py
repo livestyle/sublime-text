@@ -3,9 +3,13 @@ Utility method for Sublime Text editor
 """
 
 import re
+import os.path
 import sublime
 import sublime_plugin
 from binascii import crc32
+
+# List of LiveStyle-supported file extensions
+supported_syntaxes = ['css', 'less', 'scss']
 
 _settings = None
 _sels = {}
@@ -109,24 +113,24 @@ def is_locked(view):
 
 #############################
 
-def supported_views(syntaxes):
+def supported_views():
 	"Returns list of opened views matching given syntax list"
 	views = []
 	for view in all_views():
-		v = is_supported_view(view, syntaxes)
+		v = is_supported_view(view)
 		if v:
 			views.append(v)
 
 	return views
 
-def supported_files(syntaxes):
+def supported_files():
 	"Returns list of opened files with given syntaxes"
-	return [file_name(sv['view']) for sv in supported_views(syntaxes)]
+	return [file_name(sv['view']) for sv in supported_views()]
 
-def is_supported_view(view, syntaxes, strict=False):
+def is_supported_view(view, strict=False):
 	"Check if given view matches given syntax"
 
-	for syntax in syntaxes:
+	for syntax in supported_syntaxes:
 		sel = selector_setting(syntax)
 		if not sel:
 			continue
@@ -140,6 +144,81 @@ def is_supported_view(view, syntaxes, strict=False):
 				'view': view,
 				'syntax': syntax
 			}
+
+def view_syntax(view):
+	"Returns LiveStyle-supported syntax for given view"
+	syntax = 'css'
+	sv = is_supported_view(view)
+	if sv:
+		syntax = sv['syntax']
+		# detecting syntax by scope selector isn't always a good idea:
+		# sometimes users accidentally pick wrong syntax, for example,
+		# CSS for .less files. So if this is not an untitled file 
+		# we're editing, use file extension to resolve syntax
+		m = re.search(r'\.(css|less|scss)$', file_name(view))
+		if m: syntax = m.group(1)
+
+	return syntax
+
+def payload(view, data=None):
+	"Returns diff/patch payload for given view"
+	cn = content(view)
+	syntax = view_syntax(view)
+
+	result = {
+		'uri':     file_name(view),
+		'syntax':  syntax,
+		'content': cn,
+		'hash':    hash(cn),
+	}
+
+	global_deps = []
+	try:
+		global_deps = get_global_deps(view, syntax)
+	except Exception as e:
+		pass
+
+	if global_deps:
+		result['globalDependencies'] = global_deps
+
+	if data:
+		result.update(data)
+
+	return result
+
+def get_global_deps(view, syntax):
+	"""
+	Returns list of global dependencies defined in project
+	preferences for given view.
+	Currently works in Sublime Text 3 only
+	"""
+	# get global stylesheets defined in "livestyle/globals"
+	# section of current project
+	result = []
+
+	if syntax == 'css':
+		return result
+
+	wnd = view.window()
+	project_file = wnd.project_file_name()
+	if not project_file or not wnd.project_data():
+		return result
+
+	project_base = os.path.dirname(project_file)
+	deps = wnd.project_data().get('livestyle', {}).get('globals', [])
+	# resolve globals: use only ones matched current syntax
+	# and make paths absolute
+	possible_ext = ['.%s' % syntax, '.css']
+	for d in deps:
+		if os.path.splitext(d)[1] not in possible_ext:
+			continue
+
+		d = os.path.expanduser(d)
+		if not os.path.isabs(d):
+			d = os.path.join(project_base, d)
+
+		result.append(d)
+	return result
 
 #####################################
 
