@@ -8,6 +8,7 @@ to patcher and save system resources
 import logging
 import livestyle.client as client
 import livestyle.utils.editor as editor_utils
+import sublime
 from threading import Thread
 from time import clock
 
@@ -54,14 +55,19 @@ def next_queued(release=False):
 
 		logger.info('Send "calculate-diff" message')
 		waiting_response = {'uri': uri, 'created': clock()}
-		client.send_async('calculate-diff', editor_utils.payload(view))
-		# thread = Thread(target = send_message, args = (editor_utils.payload(view), ))
+		# client.send_async('calculate-diff', editor_utils.payload(view))
+
+		_send_message = lambda: client.send_async('calculate-diff', editor_utils.payload(view))
+
+		sublime.set_timeout_async(_send_message, 1)
+		# thread = Thread(target=_send_message)
+		# thread.daemon = True
 		# thread.start()
 		# thread.join()
 
 def send_message(payload):
 	logger.info('__send message')
-	client.send('calculate-diff', payload)
+	client.send_async('calculate-diff', payload)
 
 
 @client.on('diff')

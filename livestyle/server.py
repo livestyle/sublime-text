@@ -98,8 +98,9 @@ def handle_message(message, client):
 	"Perform a special processing of incoming messages"
 	try:
 		payload = json.loads(message)
-	except Error as e:
+	except Exception as e:
 		logger.error('Error while handling incoming message: %s' % e)
+		logger.error(message)
 		return
 
 	receivers = clients
