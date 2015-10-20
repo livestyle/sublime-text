@@ -6,7 +6,7 @@ import re
 import os.path
 import sublime
 import sublime_plugin
-from binascii import crc32
+from zlib import adler32 # adler32 considered faster than crc32
 
 # List of LiveStyle-supported file extensions
 supported_syntaxes = ['css', 'less', 'scss']
@@ -20,13 +20,13 @@ try:
 		return isinstance(s, basestring)
 
 	def hash(content):
-		return crc32(content)
+		return adler32(content)
 except NameError:
 	def isstr(s):
 		return isinstance(s, str)
 
 	def hash(content):
-		return crc32(bytes(content, 'UTF-8'))
+		return adler32(bytes(content, 'UTF-8'))
 
 def main_thread(fn):
 	"Run function in main thread"

@@ -8,27 +8,25 @@ to patcher and save system resources
 import logging
 import livestyle.client as client
 import livestyle.utils.editor as editor_utils
-import sublime
-from tornado.ioloop import IOLoop
-from threading import Thread
 from time import time
 
-waiting_response = [None]
+_state = {
+	'locked_by': None,
+	'created': 0,
+	'pending': []
+}
 "Contains data about currently performing diff request"
 
 wait_timeout = 10
-"Duration, in seconds, after which performing diff considered obsolete"
-
-pending = [] # must be ordered list(), not set()
-"List pending diff documents"
+"Duration, in seconds, after which performing diff lock considered obsolete"
 
 logger = logging.getLogger('livestyle')
 
 def diff(view):
 	uri = editor_utils.file_name(view)
-	if uri not in pending:
-		logger.info('Pending patch request for %s' % uri)
-		pending.append(uri)
+	if uri not in _state['pending']:
+		logger.debug('Pending patch request for %s' % uri)
+		_state['pending'].append(uri)
 
 	next_queued()
 
@@ -36,55 +34,36 @@ def next_queued(release=False):
 	"Move to next queued diff request, if possible"
 	
 	if release:
-		logger.info('Release diff lock')
-		waiting_response[0] = None
+		logger.debug('Release diff lock')
+		_state['locked_by'] = None
 
 	# make sure current command lock is still valid
-	if waiting_response[0] and waiting_response[0]['created'] < time() - wait_timeout:
-		logger.info('Waiting response is obsolete, reset')
-		waiting_response[0] = None
+	if _state['locked_by'] and _state['created'] < time() - wait_timeout:
+		logger.debug('Waiting response is obsolete, reset')
+		_state['locked_by'] = None
 
-	if not waiting_response[0] and pending:
-		uri = pending.pop(0)
+	if not _state['locked_by'] and _state['pending']:
+		uri = _state['pending'].pop(0)
 		view = editor_utils.view_for_uri(uri)
 		if not view:
 			# looks like view for pending diff is already closed, move to next one
-			logger.info('No view, move to next queued diff item')
+			logger.debug('No view, move to next queued diff item')
 			return next_queued()
 
 
-		logger.info('Send "calculate-diff" message')
-		waiting_response[0] = {'uri': uri, 'created': time()}
-		start = time()
-
-		payload = editor_utils.payload(view)
-		logger.info('Created payload in %f' % (time() - start))
-
-		# client.send_async('calculate-diff', editor_utils.payload(view))
-		def _done(f):
-			logger.info('Message sent in %f' % (time() - start))
-
-		def _send(): 
-			IOLoop.current().add_future(client.send_async('calculate-diff', payload), _done)
-		# _send_message = lambda: client.send_async('calculate-diff', editor_utils.payload(view))
-
-		# sublime.set_timeout_async(_send, 1)
-		thread = Thread(target=_send)
-		thread.daemon = True
-		thread.start()
+		logger.debug('Send "calculate-diff" message')
+		_state['locked_by'] = uri
+		_state['created'] = time()
+		client.send('calculate-diff', editor_utils.payload(view))
+		
 	else:
-		logger.info('Diff lock, waiting for response')
-
-def send_message(payload):
-	logger.info('__send message')
-	client.send_async('calculate-diff', payload)
-
+		logger.debug('Diff lock, waiting for response')
 
 @client.on('diff')
 def handle_diff_response(data):
-	logger.info('Got diff response for %s' % data['uri'])
-	if waiting_response[0] and waiting_response[0]['uri'] == data['uri']:
-		logger.info('Release diff lock, move to next item')
+	logger.debug('Got diff response for %s' % data['uri'])
+	if _state['locked_by'] and _state['locked_by'] == data['uri']:
+		logger.debug('Release diff lock, move to next item')
 		next_queued(True)
 
 @client.on('error')
@@ -94,5 +73,5 @@ def handle_error_response(data):
 		return next_queued(True)
 
 	origin = data['origin'] or {}
-	if origin.get('name') == 'calculate-diff' and waiting_response[0] and waiting_response[0]['uri'] == origin.get('uri'):
+	if origin.get('name') == 'calculate-diff' and _state['locked_by'] and _state['locked_by'] == origin.get('uri'):
 		next_queued(True)
