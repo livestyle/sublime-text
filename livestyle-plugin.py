@@ -10,7 +10,7 @@ import sublime
 import sublime_plugin
 
 base_path = os.path.abspath(os.path.dirname(__file__))
-for p in ['', 'livestyle', 'certifi', 'backports_abc.zip', 'singledispatch.zip', 'tornado.zip', 'backports.zip']:
+for p in ['', 'livestyle', 'certifi', 'tornado.zip']:
 	p = os.path.join(base_path, p)
 	if p not in sys.path:
 		sys.path.append(p)
