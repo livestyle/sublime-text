@@ -31,7 +31,7 @@ from livestyle.diff import diff
 sublime_ver = int(sublime.version()[0])
 conn_attempts = 0
 max_conn_attempts = 10
-ls_server_port = 54000
+ls_server_port = int(editor_utils.get_setting('port') or 54000)
 
 #############################
 # Editor
@@ -171,11 +171,11 @@ def on_client_close():
 
 @gen.coroutine
 def client_connect():
-	port = editor_utils.get_setting('port', ls_server_port)
+	port = ls_server_port
 	try:
 		yield client.connect(port=port)
 		logger.info('Editor client connected')
-	except OSError as e:
+	except Exception as e:
 		logger.info('Client connection error: %s' % e)
 		# In most cases this exception means there's no
 		# LiveStyle server running. Create our own one
@@ -186,7 +186,7 @@ def create_server(port):
 	# Due to concurrency, it is possible that LiveStyle server
 	# is already running when we call this function
 	try:
-		logger.info('Create own server')
+		logger.info('Create own server on port %d' % port)
 		server.start(port=port)
 	except OSError as e:
 		if e.errno != 48:

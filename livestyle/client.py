@@ -23,6 +23,10 @@ _state = {
 	'queue': []
 }
 
+def main_thread(fn):
+	"Run function in main thread"
+	return lambda *args, **kwargs: sublime.set_timeout(lambda: fn(*args, **kwargs), 1)
+
 @gen.coroutine
 def connect(host='ws://127.0.0.1', port=54000, endpoint='/livestyle'):
 	"Connects to LiveStyle server"
@@ -35,7 +39,7 @@ def connect(host='ws://127.0.0.1', port=54000, endpoint='/livestyle'):
 	url = '%s:%d%s' % (host, port, endpoint)
 	sock = yield tornado.websocket.websocket_connect(url)
 
-	dispatcher.emit('open')
+	_emit('open')
 	_reset_queue()
 	logger.debug('Connected to server at %s' % url)
 
@@ -45,7 +49,7 @@ def connect(host='ws://127.0.0.1', port=54000, endpoint='/livestyle'):
 			sock = None
 			logger.debug('Disconnected from server')
 			_reset_queue()
-			dispatcher.emit('close')
+			_emit('close')
 			return
 		_handle_message(msg)
 
@@ -61,7 +65,7 @@ def send(name, data=None):
 def _handle_message(message):
 	payload = json.loads(message)
 	logger.debug('Received message "%s"' % payload['name'])
-	dispatcher.emit(payload['name'], payload.get('data'))
+	_emit(payload['name'], payload.get('data'))
 
 def on(name, callback=None):
 	if callback is None: # using as decorator
@@ -75,6 +79,10 @@ def once(name, callback=None):
 	if callback is None: # using as decorator
 		return lambda f: dispatcher.once(name, f)
 	dispatcher.once(name, callback)
+
+@main_thread
+def _emit(name, payload=None):
+	dispatcher.emit(name, payload)
 
 # Message queuing
 
@@ -110,4 +118,4 @@ def _on_message_sent(f=None):
 
 def _reset_queue():
 	_state['locked'] = False
-	_state['queue'].clear()
+	_state['queue'][:] = [] # instead of .clear(), unsupported in 2.6
