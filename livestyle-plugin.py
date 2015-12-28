@@ -246,6 +246,7 @@ class LivestyleReplaceContentCommand(sublime_plugin.TextCommand):
 			# replace whole content
 			self.view.replace(edit, sublime.Region(0, self.view.size()), payload.get('content', ''))
 
+		editor_utils.focus_view(self.view)
 		self.view.show(self.view.sel())
 
 		# update initial content for current view in LiveStyle cache
