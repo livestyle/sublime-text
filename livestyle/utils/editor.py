@@ -130,35 +130,39 @@ def supported_files():
 def is_supported_view(view, strict=False):
 	"Check if given view matches given syntax"
 
-	for syntax in supported_syntaxes:
-		sel = selector_setting(syntax)
-		if not sel:
-			continue
-		if not view.file_name() and not strict:
-			# For new files, check if current scope is text.plain (just created)
-			# or it's a strict syntax check
-			sel = '%s, text.plain' % sel
+	# detecting syntax by scope selector isn't always a good idea:
+	# sometimes users accidentally pick wrong syntax, for example,
+	# CSS for .less files, Sass for .scss file. So if this is not an untitled 
+	# file we're editing, use file extension to resolve syntax
+	m = re.search(r'\.(css|less|scss)$', file_name(view))
+	found_syntax = None
+	if m:
+		found_syntax = m.group(1)
+	else:
+		for syntax in supported_syntaxes:
+			sel = selector_setting(syntax)
+			if not sel:
+				continue
+			if not view.file_name() and not strict:
+				# For new files, check if current scope is text.plain (just created)
+				# or it's a strict syntax check
+				sel = '%s, text.plain' % sel
 
-		if view.score_selector(0, sel) > 0:
-			return {
-				'view': view,
-				'syntax': syntax
-			}
+			if view.score_selector(0, sel) > 0:
+				found_syntax = syntax
+				break
+				
+	if found_syntax:
+		return {
+			'view': view,
+			'syntax': found_syntax
+		}
+
 
 def view_syntax(view):
 	"Returns LiveStyle-supported syntax for given view"
-	syntax = 'css'
 	sv = is_supported_view(view)
-	if sv:
-		syntax = sv['syntax']
-		# detecting syntax by scope selector isn't always a good idea:
-		# sometimes users accidentally pick wrong syntax, for example,
-		# CSS for .less files. So if this is not an untitled file 
-		# we're editing, use file extension to resolve syntax
-		m = re.search(r'\.(css|less|scss)$', file_name(view))
-		if m: syntax = m.group(1)
-
-	return syntax
+	return  sv and sv['syntax'] or 'css'
 
 def payload(view, data=None):
 	"Returns diff/patch payload for given view"

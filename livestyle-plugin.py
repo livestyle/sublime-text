@@ -165,7 +165,7 @@ def handle_unsaved_changes_request(data):
 			send_unsaved_changes(view)
 
 @client.on('close')
-def on_client_close():
+def on_client_close(data):
 	logger.info('Client dropped connection')
 	# start_app()
 
